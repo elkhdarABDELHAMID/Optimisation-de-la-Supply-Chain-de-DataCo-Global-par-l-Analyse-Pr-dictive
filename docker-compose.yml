@@ -1,0 +1,250 @@
+services:
+  # PostgreSQL pour Airflow
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - data_co_global_network
+
+  # Zookeeper pour Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/data
+      - zookeeper_logs:/datalog
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - data_co_global_network
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--list", "--bootstrap-server", "kafka:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s  # Ajouté pour donner plus de temps à Kafka
+    command: >
+      bash -c "sleep 10 && /etc/confluent/docker/run"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4  # Ajouté pour éviter les problèmes réseau
+    networks:
+      - data_co_global_network
+
+  # Airflow Initialisation
+  airflow-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: "UMqbFMaIOregWLoOE0Y4R9RJLhEZC1L9q7QRoSBCO10="
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-secret-key-for-airflow"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./data:/opt/airflow/data:ro
+      - ./scripts:/opt/airflow/scripts:ro
+    entrypoint: /bin/bash
+    command: >
+      -c "/home/airflow/.local/bin/airflow db migrate && /home/airflow/.local/bin/airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4  # Ajouté pour éviter les problèmes réseau lors de la construction
+    networks:
+      - data_co_global_network
+
+  # Airflow Webserver
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-secret-key-for-airflow"
+      AIRFLOW__CORE__FERNET_KEY: "UMqbFMaIOregWLoOE0Y4R9RJLhEZC1L9q7QRoSBCO10="
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./data:/opt/airflow/data:ro
+      - ./scripts:/opt/airflow/scripts:ro
+    ports:
+      - "8080:8080"
+    command: /home/airflow/.local/bin/airflow webserver -p 8080
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4  # Ajouté pour éviter les problèmes réseau
+    networks:
+      - data_co_global_network
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: "UMqbFMaIOregWLoOE0Y4R9RJLhEZC1L9q7QRoSBCO10="
+      AIRFLOW__WEBSERVER__SECRET_KEY: "your-secret-key-for-airflow"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags:ro
+      - ./data:/opt/airflow/data:ro
+      - ./scripts:/opt/airflow/scripts:ro
+    command: /home/airflow/.local/bin/airflow scheduler
+    healthcheck:
+      test: ["CMD-SHELL", "/home/airflow/.local/bin/airflow jobs check --job-type SchedulerJob --hostname $(hostname)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4  # Ajouté pour éviter les problèmes réseau
+    networks:
+      - data_co_global_network
+
+  # Logistics API
+  logistics-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/opt/airflow/data:ro
+    command: >
+      uvicorn logistics_api.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s  # Ajouté pour donner plus de temps à l'API
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4  # Ajouté pour éviter les problèmes réseau
+    networks:
+      - data_co_global_network
+
+  # Grafana pour les visualisations avancées
+  grafana:
+    image: grafana/grafana:10.0.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./visualization/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - data_co_global_network
+  kafka-to-snowflake:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SNOWFLAKE_ACCOUNT: "UQDHYDO-VI51041"
+      SNOWFLAKE_USER: "ELKHDAR"
+      SNOWFLAKE_PASSWORD: "980719Ha@-Ha@@"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      KAFKA_TOPIC: "logistics_topic"
+    networks:
+      - data_co_global_network
+    dns:
+      - 8.8.8.8  # Google DNS
+      - 8.8.4.4
+    restart: always
+
+# Volumes pour la persistance des données
+volumes:
+  postgres_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  grafana_data:
+
+# Réseau personnalisé pour une meilleure isolation
+networks:
+  data_co_global_network:
+    driver: bridge

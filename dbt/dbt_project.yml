@@ -1,0 +1,21 @@
+name: 'dataco_global'
+version: '1.0.0'
+profile: 'snowflake'
+
+models:
+  dataco_global:
+    raw:
+      schema: raw
+    staging:
+      materialized: table
+      schema: staging
+    marts:
+      materialized: table
+      schema: marts
+
+sources:
+  - name: external
+    schema: public
+    tables:
+      - name: logistics_topic
+      - name: logs_topic

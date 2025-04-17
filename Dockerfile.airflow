@@ -1,0 +1,30 @@
+# Dockerfile.airflow
+FROM python:3.9-slim
+
+# Installer les dépendances système nécessaires
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Créer un utilisateur airflow
+RUN useradd -ms /bin/bash airflow
+
+# Définir l'environnement
+ENV AIRFLOW_HOME=/opt/airflow
+ENV PATH=/home/airflow/.local/bin:$PATH
+
+# Basculer vers l'utilisateur airflow
+USER airflow
+WORKDIR /opt/airflow
+
+# Installer Airflow et les dépendances sans contrainte
+RUN pip install --user --upgrade pip && \
+    pip install --user apache-airflow==2.9.2 \
+    psycopg2-binary==2.9.9 \
+    kafka-python==2.0.2 \
+    snowflake-connector-python==3.10.1 \
+    requests==2.31.0
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /opt/airflow/dags /opt/airflow/data /opt/airflow/scripts

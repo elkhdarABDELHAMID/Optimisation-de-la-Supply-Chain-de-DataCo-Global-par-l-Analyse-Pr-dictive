@@ -1,0 +1,7 @@
+# supprimer les volumes de Kafka et Zookeeper
+
+docker volume rm data_co_global_kafka_data                                                 
+docker volume rm data_co_global_zookeeper_data
+docker volume rm data_co_global_zookeeper_logs
+
+#
