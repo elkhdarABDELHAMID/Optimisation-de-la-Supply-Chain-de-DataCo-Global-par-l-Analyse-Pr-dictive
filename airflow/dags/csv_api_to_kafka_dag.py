@@ -10,18 +10,15 @@ import os
 import logging
 import time
 
-# إعداد الـ logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def recuperer_donnees_et_envoyer_a_kafka():
     logger.info("Début de la tâche recuperer_donnees_et_envoyer_a_kafka")
     
-    # إعدادات Kafka
     bootstrap_servers = "kafka:9092"
     topic_name = "logistic"
     
-    # إنشاء الـ topic لو ما كانش موجود
     logger.info(f"Vérification et création du topic {topic_name}...")
     try:
         admin_client = KafkaAdminClient(
@@ -45,10 +42,9 @@ def recuperer_donnees_et_envoyer_a_kafka():
         logger.error(f"Erreur lors de la création du topic {topic_name} : {e}")
         raise
 
-    # جلب البيانات من الـ API مع retry
     api_url = "http://logistics-api:8000/api/logistics"
     max_retries = 3
-    retry_delay = 5  # ثواني
+    retry_delay = 5  
     data = None
 
     for attempt in range(max_retries):
@@ -72,9 +68,8 @@ def recuperer_donnees_et_envoyer_a_kafka():
         logger.error("Aucune donnée récupérée de l'API.")
         return
 
-    # التحقق من شكل البيانات
     if isinstance(data, dict) and 'data' in data:
-        data = data['data']  # استخراج القائمة الداخلية
+        data = data['data']  
     if not isinstance(data, list):
         logger.info(f"Les données ne sont pas une liste : {data}")
         if isinstance(data, dict):
@@ -90,7 +85,6 @@ def recuperer_donnees_et_envoyer_a_kafka():
             logger.info(f"Un élément n'est pas un dictionnaire : {record}")
             continue
 
-    # إعداد الـ Producer
     logger.info("Initialisation du producteur Kafka...")
     try:
         producer = KafkaProducer(
@@ -102,7 +96,6 @@ def recuperer_donnees_et_envoyer_a_kafka():
         logger.error(f"Erreur lors de l'initialisation du producteur Kafka : {e}")
         raise
 
-    # إرسال البيانات
     for record in data:
         serialized_record = json.dumps(record)
         logger.info(f"Données sérialisées avant envoi à Kafka : {serialized_record}")
