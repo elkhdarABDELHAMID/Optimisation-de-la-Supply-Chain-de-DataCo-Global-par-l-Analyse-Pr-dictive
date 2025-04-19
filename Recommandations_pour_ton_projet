@@ -1,0 +1,6 @@
+Recommandations pour ton projet :
+API /api/logistics : Utilise des colonnes comme Order Id, order date, shipping date, Order Item Quantity, Customer City, Order City, Shipping Mode pour exposer les données de livraison et de stock.
+API /api/predictions : Priorise Late_delivery_risk, Days for shipping (real), Days for shipment (scheduled), Delivery Status, Shipping Mode, Order Region pour alimenter le modèle ML et retourner les scores de risque.
+API /api/reports : Exploite Benefit per order, Sales, Order Profit Per Order, Order Item Quantity, Category Name, Market pour les KPI et visualisations dans Streamlit/Grafana.
+Transformations dbt : Nettoie les colonnes comme Customer Email et Customer Password (non pertinentes), et calcule des métriques comme l'écart entre Days for shipping (real) et Days for shipment (scheduled).
+Modèle ML : Entraîne le modèle sur Late_delivery_risk en utilisant des features comme Shipping Mode, Order Region, Days for shipment (scheduled), Customer Zipcode, Order Item Quantity.

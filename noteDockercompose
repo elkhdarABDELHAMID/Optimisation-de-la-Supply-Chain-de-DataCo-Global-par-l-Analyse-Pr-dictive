@@ -5,3 +5,5 @@ docker volume rm data_co_global_zookeeper_data
 docker volume rm data_co_global_zookeeper_logs
 
 #
+
+kafka-consumer-groups --bootstrap-server kafka:9092 --group logistics_group --describe
