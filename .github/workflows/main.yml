@@ -1,0 +1,13 @@
+name: First workflow
+
+on:
+  push:
+    branches:
+      - main
+jobs:
+  example-jon:
+    runs-on: ubntu-latest
+
+    steps:
+      - name : Print a welcoem message
+        run: echo "Welcome to out first Github actions workflows"
