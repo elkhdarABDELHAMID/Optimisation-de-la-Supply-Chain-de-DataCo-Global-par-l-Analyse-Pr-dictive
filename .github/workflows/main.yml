@@ -4,16 +4,17 @@ on:
   push:
     branches:
       - main
+
 jobs:
-  example-jon:
-    runs-on: ubntu-latest
+  example-job:
+    runs-on: ubuntu-latest
 
     steps:
-      - name : Print a welcoem message
-        run: echo "Welcome to out first Github actions workflows"
+      - name: Print a welcome message
+        run: echo "Welcome to our first GitHub Actions workflow"
 
       - name: Checkout repository
-        uses: actions/checkout@4.2.2
+        uses: actions/checkout@v4
 
       - name: List repository files
         run: ls -la
